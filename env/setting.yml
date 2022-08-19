@@ -1,0 +1,27 @@
+fastapi:
+  project-name: "Management User"
+  environment: "development"
+  key: "jlkur98362"
+  timezone: "Asia/Jakarta"
+  debug: true
+  version: "1.0.0"
+  description: "Services that handle CRUD users"
+  swagger_url : "/user-manajemen/swgr"
+  openapi_url: "/user-service/openapi.json"
+  secret : bb9236d7439b1f0c42c6afb7eb622a31
+  algorithm : HS256
+
+mongodb:
+  engine: "mongodb"
+  driver: "motor"
+  username: ""
+  password: ""
+  host: "localhost"
+  port: 27017
+  # DATABASE NAME
+  name: "manajemen_user"
+
+service:  
+  name: "user-service"
+  host: "localhost"
+  port: 8193
