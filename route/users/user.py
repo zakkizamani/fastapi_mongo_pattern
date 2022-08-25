@@ -2,11 +2,15 @@ from fastapi import APIRouter, Depends, Body
 from auth.jwt_handler import signJWT
 from auth.jwt_beaerer import jwtBearer
 from src.model.user.user import UserPage, UserSuccess
-from src.model.user.user_dto import UserDto, UserLoginSchema
+from src.model.user.user_dto import ErrorResponseModel, UserDto, UserLoginSchema, ResponseModel, userUpdate
 from src.model.default.paging import Pagination
 from src.model.default.response import SuccessRespone
 from util.field.pydantic_object_id import PydanticObjectId
 from env.mongo_collection import *
+from fastapi.encoders import jsonable_encoder
+from src.controller.user.user import (
+    retrive_all_users,add_user, retrive_userId, user_update, delete_user
+)
 
 router_user = APIRouter(
     prefix="/user",
@@ -14,99 +18,59 @@ router_user = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-#get Users
-@router_user.get("/users", dependencies=[Depends(jwtBearer())])
-async def user_get_users(paging: Pagination = Depends(Pagination)):
-    _user=[]
-    data_user = users.find()
-    for data in data_user:
-        _user.append(data)
-    return str(_user)
- 
+#get all Users
+@router_user.get("/users", response_description="Added data into user database", dependencies=[Depends(jwtBearer())])
+async def get_all_users():
+    users = await retrive_all_users()
+    if users:
+        return ResponseModel(users, "users retrive sucessufly")
+    return ResponseModel(users, "Empty list returned")
+    
+
+# # add User
+@router_user.post('/users', response_description="added data into db users",dependencies=[Depends(jwtBearer())])
+async def add_users_data(user : UserDto = Body(...)):
+     user =  jsonable_encoder(user)
+     new_user = await add_user(user)
+     return ResponseModel(new_user, "User add successfuly!") 
+
 
 # get id User
-@router_user.get('/users/{username}',dependencies=[Depends(jwtBearer())])
-async def user_get_id_users(user_dto: UserDto):
-    try:
-        result = users.find_one({'username':user_dto})
-        if result:
-            return str(result)
-        return {"Status" : "Data Tidak Ditemukan!"}
-    except Exception as e:
-        return {"Status" : "Data Tidak Ditemukan!"}
+@router_user.get('/users/{id}', response_description="get user from ID", dependencies=[Depends(jwtBearer())])
+async def get_user_id(id):
+    user = await retrive_userId(id)
+    if user:
+        return ResponseModel(user, "User ditemukan!")
+    return ErrorResponseModel(user, 404, "user tidak ditemukan")
 
-# add User
-@router_user.post('/users', dependencies=[Depends(jwtBearer())])
-async def user_add_users(user_dto: UserDto):
-    result=users.insert_one(user_dto.dict()).inserted_id
-    return {
-        "status": "success",
-        "data" : user_dto
-    }
 
 # update User
-@router_user.put('/users', dependencies=[Depends(jwtBearer())])
-async def user_edit_user(user_dto: UserDto):
-    result = users.update_one({'username': user_dto.username}, {'$set':{
-        "nama" : user_dto.nama,
-        "email" : user_dto.email,
-        "phone" : user_dto.phone,
-        "address" : user_dto.address,
-        "username" : user_dto.username,
-        "password" : user_dto.password,
-        "status" : user_dto.status,
-        "created_time" : user_dto.created_time,
-        "updated_time" : user_dto.updated_time,
-        "updated_by" : user_dto.updated_by
-        }})
-    return {
-        "status" : "Update Success!",
-        "data" : user_dto
-    }
-
-# delete User
-@router_user.delete('/users/{username}',dependencies=[Depends(jwtBearer())])
-async def user_delete_user(user_dto: UserDto):
-    result = users.find_one({'username':user_dto})
-    if result:
-        users.delete_one({'username':user_dto})
-        return {
-            "status":"Delete Success!"
-        }
-    else:
-        return {"Status" : "Data Tidak Ditemukan!"}
-
-
-# user signup
-# @router_user.post('/user/signup')
-# async def user_signup_user(user_dto : UserDto =Body(default=None)):
-#     checkUsername = users.find_one({'username':user_dto.username})
-#     if not checkUsername:
-#         result=users.insert_one(user_dto.dict()).inserted_id
-#         return signJWT(user_dto.id, user_dto.username, user_dto.email, user_dto.phone)
-#     else:
-#         return {"Status" : "Username Sudah Terdaftar!"}
+@router_user.put('/users/{id}', response_description="Edit data user", dependencies=[Depends(jwtBearer())])
+async def update_user_data(id:str, req: userUpdate = Body()):
+    req = {k: v for k, v in req.dict().items() if v is not None}
+    updated_user= await user_update(id, req)
+    if updated_user:
+        return ResponseModel(
+            'user with ID: {} name update is successful'.format(id),
+            'user berhasil di Update'
+        )
+    return ErrorResponseModel(
+        "An error occured",
+        404,
+        "Error when updating the user data"
+    )
     
-# # user Login
-# @router_user.post('/user/login')
-# async def user_login_login(user: UserLoginSchema =Body(default=None)):
-#     checkUserLogin = users.find_one({'username':user.username})
-#     if (checkUserLogin):
-#         if user.username==checkUserLogin["username"] and  checkUserLogin["password"]==user.password and checkUserLogin["status"]==True:
-#             token = signJWT(str(checkUserLogin["_id"]), checkUserLogin["username"], checkUserLogin["email"], checkUserLogin["phone"])
-#             return {
-#                 "status_code":200,
-#                 "message":"Berhasil Login",
-#                 "access_token": token,
-#                 "data":{
-#                     "id":str(checkUserLogin["_id"]),
-#                     "nama":checkUserLogin["nama"]
-#                 }
-#             }
-#         elif checkUserLogin["status"] == False:
-#             return {"status":"akun tidak aktif"}
-#         else:
-#             return {"status":"password salah"}
-#     else:
-#         return {"status":"user data tidak ditemukan"}
 
+
+# # delete User
+@router_user.delete('/users/{id}', response_description="delete user by id", dependencies=[Depends(jwtBearer())])
+async def delete_user_data(id):
+    delete_user_data = await delete_user(id)
+    if delete_user_data:
+        return ResponseModel(
+            "user with ID:{} removed".format(
+                id), "user deleted successfuly"
+        )   
+    return ErrorResponseModel(
+        "An erroroccured", 404, "user with id{0} doesn't exist".format(id)
+    )
