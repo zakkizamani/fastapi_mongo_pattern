@@ -46,3 +46,5 @@ async def delete_user(id:str):
     if user:
         await TBL_USER.delete_one({"_id":PydanticObjectId(id)})
         return True
+    
+    # penambahancontroller
